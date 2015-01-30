@@ -1,21 +1,21 @@
 module Keybase::Core
   # A Keybase user containing all attributes you have permission to see
   class User
-    
+
     attr_reader :id, :basics, :invitation_stats, :profile, :emails,
                 :public_keys, :private_keys
 
     def initialize(params)
       @id = params['id']
       @invitation_stats = OpenStruct.new(params['invitation_stats'])
-      
+
       set_basics(params['basics'])             if params['basics']
       set_profile(params['profile'])           if params['profile']
       set_emails(params['emails'])             if params['emails']
       set_public_keys(params['public_keys'])   if params['public_keys']
       set_private_keys(params['private_keys']) if params['private_keys']
     end
-    
+
     # Lookup a user on Keybase
     #
     # @param [String] username the username of the user you are searching for
@@ -110,11 +110,11 @@ module Keybase::Core
     # @raise [Keybase::InputError] if the key is empty or invalid
     # @raise [Keybase::BadSessionError] if the session is not valid
     # @raise [Keybase::CSRFVerificationError] if the CSRF token is not valid
-    # @return [String] The Key ID for the uploaded key   
+    # @return [String] The Key ID for the uploaded key
     def add_private_key(key)
       Request::Key.add(private_key: key)
     end
-    
+
     # Revoke a key from Keybase
     #
     # This requires login first.
@@ -130,15 +130,15 @@ module Keybase::Core
     def revoke_key(kid)
       Request::Key.revoke(kid)
     end
-    
+
     private
-    
+
     def set_basics(params)
       @basics = OpenStruct.new(params.merge(created_at: nil, updated_at: nil))
       @basics.created_at = Time.at(@basics.ctime) if @basics.ctime
       @basics.updated_at = Time.at(@basics.mtime) if @basics.mtime
     end
-    
+
     def set_profile(params)
       @profile = OpenStruct.new(params.merge(updated_at: nil))
       @profile.updated_at = Time.at(@profile.mtime) if @profile.mtime
@@ -151,25 +151,60 @@ module Keybase::Core
         @emails.send("#{k}=".to_sym, OpenStruct.new(v))
       end
     end
-    
+
     def set_public_keys(params)
       @public_keys = OpenStruct.new(params)
-      @public_keys = update_collection(params, @public_keys)    
+      @public_keys = parse_data(params, @public_keys)
     end
-    
+
     def set_private_keys(params)
       @private_keys = OpenStruct.new(params)
-      @private_keys = update_collection(params, @private_keys)       
+      @private_keys = parse_data(params, @private_keys)
     end
-    
-    def update_collection(params, collection)
-      params.each do |k,v|
-        v.merge!('created_at' => Time.at(v['ctime']))
-        v.merge!('updated_at' => Time.at(v['mtime']))
-        collection.send("#{k}=".to_sym, OpenStruct.new(v))
-      end      
+
+    def parse_data(params, collection)
+      parse_primary(params, collection)
+      parse_sub_keys('subkeys', params, collection)
+      parse_sub_keys('sibkeys', params, collection)
+      parse_families(params, collection)
+    end
+
+    def update_collection(key, data, collection)
+      collection.send("#{k}=".to_sym, OpenStruct.new(v))
       collection
     end
 
+    def parse_key(data)
+      data.merge!('created_at' => Time.at(data['ctime']))
+      data.merge!('updated_at' => Time.at(data['mtime']))
+
+      OpenStruct.new(data)
+    end
+
+    def parse_primary(data, collection)
+      collection.primary = parse_key(data["primary"])
+    end
+
+    # unsure of what this format looks like...
+    def parse_sub_keys(key, data, collection)
+      keys = data[key].map do |key, key_info|
+        parse_key(key_info)
+      end
+
+      collection.subkeys = keys
+    end
+
+
+    def parse_families(data, collection)
+      families = {}
+
+      data['families'].each do |key, keys|
+        families[key] = keys.map do |key|
+          parse_key(key)
+        end
+      end
+
+      collection.families = families
+    end
   end
 end
