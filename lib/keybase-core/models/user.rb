@@ -187,7 +187,10 @@ module Keybase::Core
 
     # unsure of what this format looks like...
     def parse_sub_keys(key, data, collection)
-      keys = data[key].map do |key, key_info|
+      raw = data[key]
+      return nil unless raw
+
+      keys = raw.map do |key, key_info|
         parse_key(key_info)
       end
 
@@ -198,7 +201,10 @@ module Keybase::Core
     def parse_families(data, collection)
       families = {}
 
-      data['families'].each do |key, keys|
+      fam_data = data['families']
+      return nil unless fam_data
+
+      fam_data.each do |key, keys|
         families[key] = keys.map do |key|
           parse_key(key)
         end
