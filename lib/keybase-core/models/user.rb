@@ -167,11 +167,12 @@ module Keybase::Core
       parse_sub_keys('subkeys', params, collection)
       parse_sub_keys('sibkeys', params, collection)
       parse_families(params, collection)
+
+      collection
     end
 
     def update_collection(key, data, collection)
-      collection.send("#{k}=".to_sym, OpenStruct.new(v))
-      collection
+      collection.send("#{key}=".to_sym, data)
     end
 
     def parse_key(data)
@@ -194,17 +195,15 @@ module Keybase::Core
         parse_key(key_info)
       end
 
-      collection.subkeys = keys
+      update_collection(key, keys, collection)
     end
 
-
     def parse_families(data, collection)
+      raw = data['families']
+      return nil unless raw
+
       families = {}
-
-      fam_data = data['families']
-      return nil unless fam_data
-
-      fam_data.each do |key, keys|
+      raw.each do |key, keys|
         families[key] = keys.map do |key|
           parse_key(key)
         end
